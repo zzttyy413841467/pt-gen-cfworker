@@ -1,0 +1,9 @@
+name = "ptgen"
+type = "webpack"
+webpack_config = "webpack.config.js"
+workers_dev = true
+account_id = "8a46f70f915c01e10782d1a645249d94"
+vars = { }
+kv_namespaces = [
+  { binding = "PT_GEN_STORE_OLD", id = "da323197399b4898bccce6b83b7c28da" }
+]

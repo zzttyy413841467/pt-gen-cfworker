@@ -5,5 +5,5 @@ workers_dev = true
 account_id = "CF_ACCOUNT_ID"
 vars = { }
 kv_namespaces = [
-  { binding = "PT_GEN_STORE", id = "" }
+  { binding = "PT_GEN_STORE_OLD", id = "" }
 ]
