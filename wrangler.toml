@@ -1,6 +1,6 @@
 name = "ptgen"
-type = "webpack"
-webpack_config = "webpack.config.js"
+main = "index.js"
+compatibility_date = "2024-11-01"
 workers_dev = true
 account_id = "8a46f70f915c01e10782d1a645249d94"
 vars = { }

@@ -1,4 +1,4 @@
-import {AUTHOR, makeJsonResponse, makeJsonRawResponse, restoreFromKV} from "./lib/common";
+import {getAUTHOR, makeJsonResponse, makeJsonRawResponse, restoreFromKV} from "./lib/common";
 import debug_get_err from "./lib/error";
 
 import {search_douban, gen_douban} from "./lib/douban";
@@ -10,11 +10,13 @@ import {gen_epic} from "./lib/epic";
 import page from './index.html';
 
 /**
- * Cloudflare Worker entrypoint
+ * Cloudflare Worker entrypoint (ES module format)
  */
-addEventListener("fetch", event => {
-  event.respondWith(handle(event));
-});
+export default {
+  async fetch(request, env, ctx) {
+    return handle(request, env, ctx);
+  }
+};
 
 const support_list = {
   // 注意value值中正则的分组只能有一个，而且必须是sid信息，其他分组必须设置不捕获属性
@@ -32,9 +34,7 @@ const support_site_list = Object.keys(support_list);
  * Fetch and log a request
  * @param {Event} event
  */
-async function handle(event) {
-  const request = event.request; // 获取请求
-
+async function handle(request, env, ctx) {
   // 处理OPTIONS
   if (request.method === "OPTIONS") {
     return handleOptions(request);
@@ -57,7 +57,7 @@ async function handle(event) {
       // 其他的请求均应视为ajax请求，返回JSON
       else {
         // 如果设置有 APIKEY 环境变量，则进行检查
-        if (globalThis['APIKEY'] && uri.searchParams.get('apikey') !== globalThis['APIKEY']) {
+        if (env['APIKEY'] && uri.searchParams.get('apikey') !== env['APIKEY']) {
           return makeJsonRawResponse({
             'error': 'apikey required.'
           }, {status: 403})
@@ -65,7 +65,7 @@ async function handle(event) {
 
         let response_data;
         if (uri.searchParams.get('search')) {
-          if (globalThis['DISABLE_SEARCH']) {
+          if (env['DISABLE_SEARCH']) {
             response_data = {error: "this ptgen disallow search"};
           } else {
             // 搜索类（通过PT-Gen代理）
@@ -73,7 +73,7 @@ async function handle(event) {
             let source = uri.searchParams.get('source') || 'douban';
             cache_key = `search-${source}-${keywords}`
 
-            const cache_data = await restoreFromKV(cache_key)
+            const cache_data = await restoreFromKV(cache_key, env['PT_GEN_STORE_OLD'])
             if (cache_data) {
               response_data = cache_data
             } else if (support_site_list.includes(source)) {
@@ -117,7 +117,7 @@ async function handle(event) {
           } else {
             cache_key = `info-${site}-${sid}`
 
-            const cache_data = await restoreFromKV(cache_key)
+            const cache_data = await restoreFromKV(cache_key, env['PT_GEN_STORE_OLD'])
             if (cache_data) {
               response_data = cache_data
             } else if (support_site_list.includes(site)) {
@@ -145,26 +145,26 @@ async function handle(event) {
         }
 
         if (response_data) {
-          response = makeJsonResponse(response_data)
-          if (globalThis['PT_GEN_STORE_OLD'] && typeof response_data.error === 'undefined') {
-            await globalThis['PT_GEN_STORE_OLD'].put(cache_key, JSON.stringify(response_data), {expirationTtl: 86400 * 2})
+          response = makeJsonResponse(response_data, env)
+          if (env['PT_GEN_STORE_OLD'] && typeof response_data.error === 'undefined') {
+            await env['PT_GEN_STORE_OLD'].put(cache_key, JSON.stringify(response_data), {expirationTtl: 86400 * 2})
           }
         }
       }
 
 
       // 添加缓存，此处如果response如果为undefined的话会抛出错误
-      event.waitUntil(cache.put(request, response.clone()));
+      ctx.waitUntil(cache.put(request, response.clone()));
     } catch (e) {
       let err_return = {
-        error: `Internal Error, Please contact @${AUTHOR}. Exception: ${e.message}`
+        error: `Internal Error, Please contact @${getAUTHOR(env)}. Exception: ${e.message}`
       };
 
       if (uri.searchParams.get("debug") === '1') {
         err_return['debug'] = debug_get_err(e, request);
       }
 
-      response = makeJsonResponse(err_return);
+      response = makeJsonResponse(err_return, env);
       // 当发生Internal Error的时候不应该进行cache
     }
   }
